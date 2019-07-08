@@ -159,6 +159,9 @@ NOTE_COORD_RE = re.compile(r"\(\s*(\d+|\d+\.\d+)\s*,\s*(\d+|\d+\.\d+)\s*\)")
 QID_STARTED = set()
 QID_COMPLETED = set()
 
+# database connection cursor for querying information
+DBC = None
+
 
 # -----------------------------------------------------------------------------
 
@@ -644,23 +647,66 @@ def print_quest_list(qids, file=sys.stdout):
               file=file)
 
 
-# -----------------------------------------------------------------------------
-
-
-if __name__ == '__main__':
+def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         'file', type=argparse.FileType('r'), nargs='*', default=[sys.stdin])
     parser.add_argument(
         '-z', '--zone', dest='header',
         help='Check QIDs in guide for QIDs in guide database')
-    options = parser.parse_args()
+
+    # database connection
+    database = parser.add_argument_group('database')
+    database.add_argument(
+        '-d', '--database', dest='database', action='store_true',
+        help='Enable queryiing CMaNGOS style MySQL database')
+    database.add_argument(
+        '--dbname', dest='dbname', metavar='DATABASE', default='classic',
+        help='Name of database (default: %(default)s)')
+    database.add_argument(
+        '-u', '--dbuser', dest='dbuser', metavar='USERNAME', default='reader',
+        help='User for database access (default: %(default)s)')
+    database.add_argument(
+        '-p', '--dbpass', dest='dbpass', metavar='PASSWORD', default='reader',
+        help='Password for database access (default: %(default)s)')
+    opts = parser.parse_args()
+
+    # establish database connection?
+    if opts.database:
+        # import MySQL module
+        try:
+            import MySQLdb
+        except ImportError as ie:
+            print("ERROR: Database querying enabled but can't import MySQLdb",
+                  '       %s' % repr(ie), sep='\n', file=sys.stderr)
+            sys.exit(1)
+        try:
+            dbconnection = MySQLdb.connect(
+                db=opts.dbname, user=opts.dbuser, passwd=opts.dbpass)
+        except MySQLdb.OperationalError as oe:
+            print("ERROR: Could not connect to database %s" % opts.dbname,
+                  '       %s' % repr(oe), sep='\n', file=sys.stderr)
+            sys.exit(1)
+
+        # create a cursor to use for database connections
+        global DBC
+        DBC = dbconnection.cursor()
 
     # check if header is known in quest db
-    if options.header and options.header not in QUESTDB:
-        print("ERROR: Zone/Header '%s' not known in Quest DB" % options.header,
+    if opts.header and opts.header not in QUESTDB:
+        print("ERROR: Zone/Header '%s' not known in Quest DB" % opts.header,
               file=sys.stderr)
 
+    return opts
+
+
+# -----------------------------------------------------------------------------
+
+
+if __name__ == '__main__':
+
+    # parse command line arguments
+    options = parse_args()
     for file in options.file:
         CURRENTFILE = file.name
         CURRENTLINE = 0
