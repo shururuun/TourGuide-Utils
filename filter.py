@@ -493,6 +493,8 @@ def dbupdate_at_location(parsed, dbresult):
         for se in dbresult:
 
             # get coordinates
+            coords = None
+            coordstr = ''
             if all(v is not None for v in [se[1], se[2], se[3]]):
                 zone = CURRENTZONE
                 if 'Z' in parsed:
@@ -533,50 +535,6 @@ def dbupdate_at_location(parsed, dbresult):
                     src['M'] = coordstr
                 print('; ALT: ' + generate_tourguide(src), file=sys.stderr)
                 print('; ALT: ' + generate_tourguide(src))
-
-    return True
-
-
-    for entry in result:
-
-
-        # generate note text
-        notetext = entry[4]
-        if notetext is None:
-            notetext = entry[8]
-        if notetext is not None:
-            if notestart is not None:
-                notetext = notestart + ' ' + notetext + '.'
-            else:
-                notetext = notetext + '.'
-
-        # mark quests from items as optional with USE
-        if entry[9] is not None:
-            update_parsed_entry(parsed, 'U', str(entry[9]))
-            update_parsed_entry(parsed, 'O', True)
-
-        # first match
-        if first:
-            first = False
-            if notetext is not None:
-                update_parsed_entry(parsed, 'N', notetext)
-            if coords is not None:
-                update_parsed_entry(parsed, 'Z', coords[2])
-                update_parsed_entry(
-                    parsed, 'M',
-                    "{0:.2f},{1:.2f}".format(coords[0] + 0.005,
-                                             coords[1] + 0.005))
-        else:
-            src = parsed.copy()
-            src['TITLE'] = entry[1]
-            if notetext is not None:
-                src['N'] = notetext
-            if coords is not None:
-                src['Z'] = coords[2]
-                src['M'] = "{0:.2f},{1:.2f}".format(coords[0] + 0.005,
-                                                    coords[1] + 0.005)
-            print('; ALT: ' + generate_tourguide(src), file=sys.stderr)
-            print('; ALT: ' + generate_tourguide(src))
 
 
 def update_from_quest(parsed, quest):
