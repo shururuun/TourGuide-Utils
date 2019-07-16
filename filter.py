@@ -10,16 +10,17 @@ PP = pprint.PrettyPrinter(indent=4)
 
 # valid races
 RACES = {
-    'Blood Elf',
-    'Draenei',
-    'Dwarf',
-    'Gnome',
-    'Human',
-    'Night Elf',
-    'Orc',
-    'Tauren',
-    'Troll',
-    'Undead'
+    'Human': 1,
+    'Orc': 2,
+    'Dwarf': 4,
+    'Night Elf': 8,
+    'Undead': 16,
+    'Tauren': 32,
+    'Gnome': 64,
+    'Troll': 128,
+    'Goblin': 256,
+    'Blood Elf': 512,
+    'Draenei': 1024
 }
 
 # valid classes
@@ -103,8 +104,15 @@ TAGORDER = [
 NOTE_COORD_RE = re.compile(r"\(\s*(\d+|\d+\.\d+)\s*,\s*(\d+|\d+\.\d+)\s*\)")
 
 # sets of started quests and completed quests
-QID_STARTED = set()
-QID_COMPLETED = set()
+QID_STARTED = []
+QID_COMPLETED = []
+
+# dict of AREAS to track
+QID_AREAS = {}
+
+# filter QID lists by races/classes
+QID_RACES = 0
+QID_CLASSES = 0
 
 # database connection cursor for querying information
 DBC = None
@@ -424,7 +432,8 @@ def dbupdate_A(parsed):
             return
 
     # something is not quite right when the qid exists but there is no starter
-    error("QID %d found, but no quest starter found in database" % qid)
+    error("QID %d: '%s' found, but no quest starter found in database" % (
+        qid, quest['name']))
 
 
 def dbupdate_T(parsed):
@@ -468,8 +477,9 @@ def dbupdate_T(parsed):
         dbupdate_at_location(parsed, dbresult=DBC.fetchall())
         return
 
-    # something is not quite right when the qid exists but there is no end
-    error("QID %d found, but no quest end found in database" % qid)
+    # something is not quite right when the qid exists but there is no starter
+    error("QID %d: '%s' found, but no quest ender found in database" % (
+        qid, quest['name']))
 
 
 # -----------------------------------------------------------------------------
@@ -482,6 +492,7 @@ def dbupdate_at_location(parsed, dbresult):
     # re-order result list if we have more than one result to nearest result
     if len(dbresult) > 1 and LASTLOCATION[0] is not None:
         # results on different maps are infinite distance
+        dbresult = list(dbresult)
         dbresult.sort(
             key=lambda pos: float('inf') if LASTLOCATION[0] != pos[0] else
             math.sqrt((LASTLOCATION[1] - pos[1]) ** 2 + (
@@ -773,12 +784,12 @@ def process_tourguide(guidestring):
     if qid is not None:
         if parsed['ACTION'] == 'A':
             if qid not in QID_STARTED:
-                QID_STARTED.add(qid)
+                QID_STARTED.append(qid)
             else:
                 error('QID %d already started in guide' % qid)
         elif parsed['ACTION'] == 'T' or parsed['ACTION'] == 't':
             if qid not in QID_COMPLETED:
-                QID_COMPLETED.add(qid)
+                QID_COMPLETED.append(qid)
             else:
                 error('QID %d already completed in guide' % qid)
 
@@ -874,6 +885,76 @@ def print_quest_list(qids, stream=sys.stdout):
               file=stream)
 
 
+def print_quest_xp():
+    """ print XP report of all turned in quests """
+
+    if len(QID_COMPLETED) == 0:
+        return
+
+    sumxp = 0
+    for qid in QID_COMPLETED:
+        quest = get_quest_info(qid)
+        if quest is None:
+            continue
+        lvl = quest['lvls'][0]
+        xp = 0
+        if quest['reqs'][1] == 0:
+            if lvl > 0 and quest['diff'] < 8:
+                xp =  QUESTXP[lvl][quest['diff']]
+                sumxp += xp
+        print("%5d [%2d] %6d %s" % (
+            qid, lvl, xp, quest['name']),
+              file=sys.stderr)
+
+    print("           ------", file=sys.stderr)
+    print("           %6d" % sumxp, file=sys.stderr)
+
+
+def print_quest_tracking():
+    """ print report of untracked quests """
+    global DBC, QID_AREAS, QID_RACES, QID_CLASSES
+
+    # populate quest lists
+    if DBC is not None:
+        # query database for earch QID_AREA entry
+        for area in QID_AREAS.keys():
+            num = DBC.execute(
+                """SELECT qt.id
+                FROM quest_template as qt
+                    INNER JOIN quest_template_addon AS qa ON qt.ID = qa.ID
+                WHERE qt.QuestSortID = %s
+                    AND
+                        (%s = 0 OR qt.AllowableRaces = 0 
+                            OR qt.AllowableRaces & %s)
+                    AND
+                        (%s = 0 OR qa.AllowableClasses = 0
+                            OR qa.AllowableClasses & %s)""",
+                (area, QID_RACES, QID_RACES, QID_CLASSES, QID_CLASSES))
+            if num == 0:
+                continue
+            for res in DBC.fetchall():
+                QID_AREAS[area].add(res[0])
+    else:
+        # look in QUESTS database for each quest in QID_AREAS
+        for qid, quest in QUESTS.items():
+            sort = quest['sort']
+            if sort in QID_AREAS:
+                # implement race filter if enabled
+                if QID_RACES != 0 and \
+                        quest['reqs'][0] != 0 and \
+                        quest['reqs'][0] & QID_RACES == 0:
+                   continue
+                QID_AREAS[sort].add(qid)
+
+    # process earch area
+    for area, allquests in QID_AREAS.items():
+        diff = allquests.difference(set(QID_STARTED), set(QID_COMPLETED))
+        if len(diff):
+            print("\nUnhandled quests for '%s':" % AREATABLE[area][0],
+                  file=sys.stderr)
+            print_quest_list(diff, stream=sys.stderr)
+
+
 def get_quest_info(qid):
     """ get quest information, either from database or static import """
     global DBC
@@ -930,6 +1011,7 @@ def get_quest_info(qid):
 
 def parse_args():
     """ parse command line arguments """
+    global QID_RACES, QID_CLASSES
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -937,6 +1019,12 @@ def parse_args():
     parser.add_argument(
         '-z', '--zone', dest='header',
         help='Check QIDs in guide for QIDs in guide database')
+    parser.add_argument(
+        '-A', '--alliance', dest='alliance', action='store_true',
+        help='Filter quests to available for Alliance')
+    parser.add_argument(
+        '-H', '--horde', dest='horde', action='store_true',
+        help='Filter quests to available for Horde')
 
     # database connection
     database = parser.add_argument_group('database')
@@ -953,6 +1041,16 @@ def parse_args():
         '-p', '--dbpass', dest='dbpass', metavar='PASSWORD', default='reader',
         help='Password for database access (default: %(default)s)')
     opts = parser.parse_args()
+
+    # check alliance/horde filters
+    if opts.alliance and opts.horde:
+        print("ERROR: Can't filter by Alliance and Horde at the same time.",
+              file=sys.stderr)
+        sys.exit(1)
+    if opts.alliance:
+        QID_RACES = 1 + 4 + 8 + 64 + 1024
+    if opts.horde:
+        QID_RACES = 2 + 16 + 32 + 128 + 512
 
     # establish database connection?
     if opts.database:
@@ -992,18 +1090,20 @@ def parse_args():
 
     # if a quest log header is set check if it is known in the AREATABLE
     if opts.header:
-        area = None
-        for id, info in AREATABLE.items():
-            if info[0] == opts.header:
-                area = id
-                break
-        if area is None:
-            print("ERROR: Zone/Header '%s' unknown in AreaTable" % opts.header,
-                  file=sys.stderr)
-            sys.exit(0)
-
-        # convert string to area id
-        opts.header = area
+        global QID_AREAS
+        headers = opts.header.split(',')
+        for header in headers:
+            header = header.strip().rstrip()
+            area = None
+            for areaid, info in AREATABLE.items():
+                if info[0] == header:
+                    area = areaid
+                    break
+            if area is None:
+                print("ERROR: Zone/Header '%s' unknown in AreaTable" % header,
+                      file=sys.stderr)
+                sys.exit(0)
+            QID_AREAS[area] = set()
 
     # return parsed options
     return opts
@@ -1029,20 +1129,10 @@ if __name__ == '__main__':
     if not FIRSTHEADER:
         print(']]', 'end)', sep='\n')
 
+    print_quest_xp()
     print('%d quests started, %d quests completed' % (
         len(QID_STARTED), len(QID_COMPLETED)), file=sys.stderr)
 
     # check QIDs in quest db
-    """
     if options.header:
-        check_qids = frozenset(QUESTS_BY_HEADER[opts.header])
-        diff = check_qids.difference(QID_STARTED, QID_COMPLETED)
-        if len(diff):
-            print("Unhandled quests for zone/header '%s':" % options.header,
-                  file=sys.stderr)
-            print_quest_list(diff, file=sys.stderr)
-        else:
-            print("No unhandled quests for zone/header '%s'" % options.header,
-                  file=sys.stderr)
-
-    """
+        print_quest_tracking()
