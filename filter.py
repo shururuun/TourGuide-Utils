@@ -22,18 +22,23 @@ RACES = {
     'Blood Elf': 512,
     'Draenei': 1024
 }
+RACES_ALLIANCE = 1 + 4 + 8 + 64 + 1024
+RACES_HORDE = 2 + 16 + 32 + 128 + 512
 
 # valid classes
 CLASSES = {
-    'Druid',
-    'Hunter',
-    'Mage',
-    'Paladin',
-    'Priest',
-    'Rogue',
-    'Shaman',
-    'Warlock',
-    'Warrior'
+    'Warrior': 1,
+    'Paladin': 2,
+    'Hunter': 4,
+    'Rogue': 8,
+    'Priest': 16,
+    'Death Knight': 32,
+    'Shaman': 64,
+    'Mage': 128,
+    'Warlock': 256,
+    'Monk': 512,
+    'Druid': 1024,
+    'Demon Hunter': 2048
 }
 
 # valid actions
@@ -553,11 +558,32 @@ def update_from_quest(parsed, quest):
 
     # update information from quest: PRE/ACTIVE on A steps
     if parsed['ACTION'] == 'A':
+        # update required pre/active quests
         pre = quest['link'][0]
         if pre > 0:
             update_parsed_entry(parsed, 'PRE', str(pre))
         if pre < 0:
             update_parsed_entry(parsed, 'ACTIVE', str(-pre))
+
+        # update required races
+        reqrace = quest['reqs'][0]
+        if reqrace != 0 and reqrace not in (RACES_ALLIANCE, RACES_HORDE):
+            racelist = []
+            for race, bit in RACES.items():
+                if bit & reqrace:
+                    racelist.append(race)
+            if len(racelist):
+                update_parsed_entry(parsed, 'R', ','.join(sorted(racelist)))
+
+        # update required classes
+        reqclass = quest['reqs'][1]
+        if reqclass != 0:
+            classlist = []
+            for cls, bit in CLASSES.items():
+                if bit & reqclass:
+                    classlist.append(cls)
+            if len(classlist):
+                update_parsed_entry(parsed, 'C', ','.join(sorted(classlist)))
 
     # update title from quest for quest-related steps
     if parsed['ACTION'] in ('A', 'T', 't', 'C'):
@@ -1048,9 +1074,9 @@ def parse_args():
               file=sys.stderr)
         sys.exit(1)
     if opts.alliance:
-        QID_RACES = 1 + 4 + 8 + 64 + 1024
+        QID_RACES = RACES_ALLIANCE
     if opts.horde:
-        QID_RACES = 2 + 16 + 32 + 128 + 512
+        QID_RACES = RACES_HORDE
 
     # establish database connection?
     if opts.database:
