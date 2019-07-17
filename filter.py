@@ -572,19 +572,18 @@ def dbupdate_at_location(parsed, dbresult):
                 if note is not None:
                     update_parsed_entry(parsed, 'N', note)
                 if coords is not None:
-                    update_parsed_entry(parsed, 'Z', coords[2])
-                    update_parsed_entry(parsed, 'M', coordstr)
+                    update_parsed_entry(parsed, 'Z', coords[0])
+                    update_parsed_entry(parsed, 'M', coords[1])
 
                 # also note location as last known location
                 LASTLOCATION = (se[1], se[2], se[3])
-
             else:
                 src = parsed.copy()
                 if note is not None:
                     src['N'] = note
                 if coords is not None:
-                    src['Z'] = coords[2]
-                    src['M'] = coordstr
+                    src['Z'] = coords[1]
+                    src['M'] = coords[0]
                 print('; ALT: ' + generate_tourguide(src), file=sys.stderr)
                 print('; ALT: ' + generate_tourguide(src))
 
