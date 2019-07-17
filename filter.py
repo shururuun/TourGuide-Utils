@@ -706,8 +706,9 @@ def update_parsed_entry(parsed, key, val):
     """ update a single entry in the parsed TourGuide entry """
     if key in parsed:
         if parsed[key] != val:
-            error("Updated %s from '%s' to '%s'" % (key, parsed[key], val))
-            parsed[key] = val
+            if key != 'M' or not parsed['M'].endswith(val):
+                error("Updated %s from '%s' to '%s'" % (key, parsed[key], val))
+                parsed[key] = val
     else:
         parsed[key] = val
 
