@@ -505,10 +505,11 @@ def dbupdate_F(parsed):
         WHERE ct.npcflag & 8192 AND c.map = %s""", (LASTLOCATION[0],)
     )
     if num == 0:
-        error("F tag, but No flight masters found on map %d" % LASTLOCATION[0])
+        error("%s tag, but No flight masters found on map %d" % (
+            parsed['ACTION'], LASTLOCATION[0]))
         return
 
-    # sort database result by distance
+    # sort database result by distance from current location
     dbres = list(DBC.fetchall())
     if len(dbres) > 1:
         dbres.sort(
@@ -516,7 +517,7 @@ def dbupdate_F(parsed):
             math.sqrt((LASTLOCATION[1] - pos[2]) ** 2 + (
                     LASTLOCATION[2] - pos[3]) ** 2))
 
-    # find coordinates for current zone or set zone firstg
+    # find coordinates for current zone or set zone first
     zone = CURRENTZONE
     if 'Z' in parsed:
         zone = parsed['Z']
@@ -879,12 +880,24 @@ def process_tourguide(guidestring):
 
 def set_zone(arg):
     """ set the active/default zone for the following tourguide entries """
-    global STARTZONE, CURRENTZONE
+    global STARTZONE, CURRENTZONE, LASTLOCATION
 
     # filter string from argument
     zone = arg.strip().rstrip()
     if zone[0] == '"' or zone[0] == '\'' and zone[0] == zone[-1]:
         zone = zone[1:-1]
+
+    # find zone in AREAS dict
+    map = None
+    area = None
+    for id, arealist in AREAS.items():
+        if zone in arealist:
+            map = id
+            area = arealist[zone]
+            break
+    if area is None:
+        print("Zone '%s' not found" % zone, file=sys.stderr)
+        sys.exit(0)
 
     # set zone
     CURRENTZONE = zone
@@ -892,7 +905,9 @@ def set_zone(arg):
     # set starting zone for the whole guide if not yet set
     if not STARTZONE:
         STARTZONE = zone
-        print('Zone Start: %s' % zone, file=sys.stderr)
+        LASTLOCATION = (map, (area[4] - area[3]) / 2, (area[2] - area[1]) / 2)
+        print('Zone Start: %s (%d, %f, %f)' % (
+            zone, map, LASTLOCATION[1], LASTLOCATION[2]), file=sys.stderr)
     else:
         print('Zone Change: %s' % zone, file=sys.stderr)
 
