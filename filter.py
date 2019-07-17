@@ -517,21 +517,11 @@ def dbupdate_F(parsed):
             math.sqrt((LASTLOCATION[1] - pos[2]) ** 2 + (
                     LASTLOCATION[2] - pos[3]) ** 2))
 
-    # find coordinates for current zone or set zone first
-    zone = CURRENTZONE
-    if 'Z' in parsed:
-        zone = parsed['Z']
-    coords = get_thott_coords(dbres[0][1], dbres[0][2], dbres[0][3], zone)
-    if coords is None:
-        coords = get_thott_coords(dbres[0][1], dbres[0][2], dbres[0][3])
-    if coords is not None:
-        coordstr = "{0:.2f},{1:.2f}".format(coords[0] + 0.005,
-                                            coords[1] + 0.005)
-
     # update coordinates
-    if coords is not None:
-        update_parsed_entry(parsed, 'Z', coords[2])
-        update_parsed_entry(parsed, 'M', coordstr)
+    coordstr = get_thott_coordstr(parsed, dbres[0][1], dbres[0][2], dbres[0][3])
+    if coordstr is not None:
+        update_parsed_entry(parsed, 'Z', coordstr[0])
+        update_parsed_entry(parsed, 'M', coordstr[1])
 
     # update note
     if 'N' not in parsed or parsed['N'].find(dbres[0][0]) < 0:
@@ -565,17 +555,8 @@ def dbupdate_at_location(parsed, dbresult):
 
             # get coordinates
             coords = None
-            coordstr = ''
             if all(v is not None for v in [se[1], se[2], se[3]]):
-                zone = CURRENTZONE
-                if 'Z' in parsed:
-                    zone = parsed['Z']
-                coords = get_thott_coords(se[1], se[2], se[3], zone)
-                if coords is None:
-                    coords = get_thott_coords(se[1], se[2], se[3])
-                if coords is not None:
-                    coordstr = "{0:.2f},{1:.2f}".format(coords[0] + 0.005,
-                                                        coords[1] + 0.005)
+                coords = get_thott_coordstr(parsed, se[1], se[2], se[3])
 
             # update note if it does not contain name
             note = None
@@ -657,6 +638,22 @@ def error(errorstring, guidenote=True):
         print('line %s: %s' % (CURRENTLINE, errorstring), file=sys.stderr)
     if guidenote:
         print('; --- FIXME: %s' % errorstring)
+
+
+def get_thott_coordstr(parsed, map, posx, posy):
+    """ get thott coordinate string """
+
+    # find coordinates for current zone or set zone first
+    zone = CURRENTZONE
+    if 'Z' in parsed:
+        zone = parsed['Z']
+    coords = get_thott_coords(map, posx, posy, zone)
+    if coords is None:
+        coords = get_thott_coords(map, posx, posy)
+    if coords is not None:
+        return coords[2], "{0:.2f},{1:.2f}".format(coords[0] + 0.005,
+                                                   coords[1] + 0.005)
+    return None
 
 
 def get_thott_coords(map, posX, posY, zone=None):
