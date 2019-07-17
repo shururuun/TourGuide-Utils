@@ -460,7 +460,7 @@ def dbupdate_T(parsed):
 
     # check 1: quest ends at an NPC
     num = DBC.execute(
-        """SELECT ct.name, c.map, c.position_x, c.position_y, NULL
+        """SELECT ct.name, c.map, c.position_x, c.position_y
         FROM quest_template AS qt
             INNER JOIN creature_questender AS cq ON qt.ID = cq.quest
             INNER JOIN creature_template AS ct ON cq.id = ct.entry
