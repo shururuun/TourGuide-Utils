@@ -668,6 +668,7 @@ def get_thott_coords(map, posX, posY, zone=None):
 
     # record best match
     area = None
+    tmap = None
     thottX = None
     thottY = None
     tdist = 71.0
@@ -691,8 +692,9 @@ def get_thott_coords(map, posX, posY, zone=None):
         # hack to find correct zone in the overlapping area list:
         # we use the area with thottbot coordinates closest to the center
         # except for the global zones with an id of zero (Azeroth, Kalimdor)
-        if area is None or (zinfo[0] > 0 and tdist > tD):
+        if area is None or tmap == 0 or (zinfo[0] > 0 and tdist > tD):
             area = zname
+            tmap = zinfo[0]
             thottX = tX
             thottY = tY
             tdist = tD
