@@ -487,6 +487,60 @@ def dbupdate_T(parsed):
         qid, quest['name']))
 
 
+def dbupdate_F(parsed):
+    """ update F action from database information """
+    global DBC, LASTLOCATION
+
+    # we need a LASTLOCATION set
+    # TODO: maybe infer location from startzone/currentzone
+    if LASTLOCATION[0] is None:
+        error("F tag, but unknown last location")
+        return
+
+    # look up all flight masters on current map
+    num = DBC.execute(
+        """SELECT ct.name, c.map, c.position_x, c.position_y
+        FROM creature_template AS ct
+        INNER JOIN creature AS c on ct.entry = c.id
+        WHERE ct.npcflag & 8192 AND c.map = %s""", (LASTLOCATION[0],)
+    )
+    if num == 0:
+        error("F tag, but No flight masters found on map %d" % LASTLOCATION[0])
+        return
+
+    # sort database result by distance
+    dbres = list(DBC.fetchall())
+    if len(dbres) > 1:
+        dbres.sort(
+            key=lambda pos: float('inf') if LASTLOCATION[0] != pos[1] else
+            math.sqrt((LASTLOCATION[1] - pos[2]) ** 2 + (
+                    LASTLOCATION[2] - pos[3]) ** 2))
+
+    # find coordinates for current zone or set zone firstg
+    zone = CURRENTZONE
+    if 'Z' in parsed:
+        zone = parsed['Z']
+    coords = get_thott_coords(dbres[0][1], dbres[0][2], dbres[0][3], zone)
+    if coords is None:
+        coords = get_thott_coords(dbres[0][1], dbres[0][2], dbres[0][3])
+    if coords is not None:
+        coordstr = "{0:.2f},{1:.2f}".format(coords[0] + 0.005,
+                                            coords[1] + 0.005)
+
+    # update coordinates
+    if coords is not None:
+        update_parsed_entry(parsed, 'Z', coords[2])
+        update_parsed_entry(parsed, 'M', coordstr)
+
+    # update note
+    if 'N' not in parsed or parsed['N'].find(dbres[0][0]) < 0:
+        update_parsed_entry(parsed, 'N', 'At %s.' % dbres[0][0])
+
+
+def dbupdate_f(parsed):
+    dbupdate_F(parsed)
+
+
 # -----------------------------------------------------------------------------
 
 
