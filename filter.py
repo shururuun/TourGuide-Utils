@@ -905,7 +905,8 @@ def set_zone(arg):
     # set starting zone for the whole guide if not yet set
     if not STARTZONE:
         STARTZONE = zone
-        LASTLOCATION = (map, (area[4] - area[3]) / 2, (area[2] - area[1]) / 2)
+        LASTLOCATION = (map, area[3] + (area[4] - area[3]) / 2,
+                        area[1] + (area[2] - area[1]) / 2)
         print('Zone Start: %s (%d, %f, %f)' % (
             zone, map, LASTLOCATION[1], LASTLOCATION[2]), file=sys.stderr)
     else:
